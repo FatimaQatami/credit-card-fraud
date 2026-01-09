@@ -8,8 +8,7 @@ from pathlib import Path
 app = FastAPI()
 
 
-# --- load once at startup ---
-
+# path and model loading
 root = Path(__file__).resolve().parent
 model = CatBoostClassifier()
 model.load_model(root / "catboost_final.cbm")
@@ -21,7 +20,7 @@ feature_order = artifacts["feature_order"]
 cat_cols = artifacts["cat_cols"]
 feature_maps = joblib.load(root / "feature_maps.joblib")
 
-# --- endpoints ---
+# endpoints
 @app.get("/")
 def health():
     return {"status": "ok"}
@@ -36,7 +35,7 @@ def predict(payload: Dict[str, Any]):
     if "UID" not in payload:
         return {"error": "UID is required"}
 
-    # 1) add engineered features from feature_maps
+    # 1) engineered features from feature_maps
     for feat_name, series in feature_maps.items():
         nlevels = getattr(series.index, "nlevels", 1)
 
@@ -72,9 +71,3 @@ def predict(payload: Dict[str, Any]):
     "prob": prob,
     "pred": pred
 }
-
-
-
-# http://127.0.0.1:8000/
-
-# http://127.0.0.1:8000/docs

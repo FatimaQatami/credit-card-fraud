@@ -12,29 +12,58 @@ from optuna.samplers import TPESampler
 from optuna.visualization import (plot_optimization_history, plot_param_importances)
 
 
+# Including feature pipeline on/off
+use_feature_pipeline = True  # False = baseline
+if use_feature_pipeline:
+    from feature_pipeline import apply_feature_engineering_selection
 
-# Load dataset
+
+# Load train file
 project_root = Path(__file__).resolve().parent.parent.parent
-train_dataset = pd.read_parquet(project_root / "data" / "processed" / "train_feat_eng.parquet")
+train = pd.read_parquet(project_root / "data" / "processed" / "train.parquet")
 
-# Ensure time-aware order 
-train_dataset = train_dataset.sort_values(['TransactionDT']).reset_index(drop=True)
+# Sort values to keep timely order
+train= train.sort_values(['TransactionDT']).reset_index(drop=True)
 
-# Correct data types 
+# Drop TransactionID and duplicates 
+train = train.drop(columns=['TransactionID'])
+train = train.drop_duplicates()
+
+# Drop features with over 99% missing values
+missing_values = ['id_24', 'id_25', 'id_07', 'id_08', 'id_21', 'id_26', 'id_22', 'id_23', 'id_27']
+train = train.drop(columns=missing_values)
+
+# Correct data types and fill NaNs
 cat_cols = ['ProductCD', 'card1', 'card2', 'card3', 'card4', 'card5', 'card6', 
                     'addr1', 'addr2', 'P_emaildomain', 'R_emaildomain', 'M1', 'M2', 'M3', 
                     'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'id_12', 'id_13', 'id_14', 'id_15', 
                     'id_16', 'id_17', 'id_18', 'id_19', 'id_20', 'id_28', 'id_29', 'id_30', 
                     'id_31', 'id_32', 'id_33', 'id_34', 'id_35', 'id_36', 'id_37', 'id_38', 
-                    'DeviceType', 'DeviceInfo', 'weekday', 'uid1', 'uid2', 'uid3', 
-                    'device_company', 'device_os', 'parent_domain_p', 'parent_domain_r',
-                    'suffix_p', 'suffix_r', 'tld_p', 'tld_r']
+                    'DeviceType', 'DeviceInfo']
+train[cat_cols] = train[cat_cols].astype('category')
 
-for col in cat_cols:
-    train_dataset[col] = LabelEncoder().fit_transform(train_dataset[col].astype('category'))
 
-X = train_dataset.drop(columns=['isFraud'])
-y = train_dataset['isFraud']
+# Feature pipeline 
+if use_feature_pipeline:
+    train = apply_feature_engineering_selection(train)
+
+
+# Features to drop (based on feature selection)
+permutation = [
+    "V139","id_37","V3","V137","V206","V93","V234","V42","V212",
+    "suffix_r","V37","V164","V273","V51","V63","V223","is_mobile"]
+train = train.drop(columns=permutation)
+
+tree_shap = ['V339', 'V172']
+train = train.drop(columns=tree_shap)
+
+mi = ['V287', 'V99', 'V284']
+train = train.drop(columns=mi)
+
+
+# Model training
+X = train.drop(columns=['isFraud'])
+y = train['isFraud']
 
 def objective(trial):
     params = {

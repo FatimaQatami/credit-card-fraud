@@ -4,11 +4,9 @@ import numpy as np
 from sklearn.model_selection import GroupKFold
 from lightgbm import LGBMClassifier
 import lightgbm as lgb
-from sklearn.metrics import average_precision_score
-import optuna
-from optuna.pruners import MedianPruner
-from optuna.samplers import TPESampler
-from optuna.visualization import (plot_optimization_history, plot_param_importances)
+from sklearn.metrics import (average_precision_score, roc_auc_score, accuracy_score, 
+    precision_score, recall_score, f1_score, fbeta_score, confusion_matrix, matthews_corrcoef)
+from imblearn.metrics import geometric_mean_score
 
 
 # Including feature pipeline on/off
@@ -16,13 +14,12 @@ use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
     from feature_pipeline import apply_feature_engineering_selection
 
-
-# Load dataset 
+# Load dataset
 project_root = Path(__file__).resolve().parent.parent.parent
 train = pd.read_parquet(project_root / "data" / "processed" / "train.parquet")
 
-# Ensuring time-aware order
-train = train.sort_values(['TransactionDT']).reset_index(drop=True)
+# Sort values to keep timely order
+train= train.sort_values(['TransactionDT']).reset_index(drop=True)
 
 # Drop TransactionID and duplicates
 train = train.drop(columns=['TransactionID'])
@@ -31,6 +28,7 @@ train = train.drop_duplicates()
 # Drop features with over 99% missing values
 missing_values = ['id_24', 'id_25', 'id_07', 'id_08', 'id_21', 'id_26', 'id_22', 'id_23', 'id_27']
 train = train.drop(columns=missing_values)
+
 
 # Correct data types 
 cat_cols = ['ProductCD', 'card1', 'card2', 'card3', 'card4', 'card5', 'card6', 
@@ -42,7 +40,8 @@ cat_cols = ['ProductCD', 'card1', 'card2', 'card3', 'card4', 'card5', 'card6',
 train[cat_cols] = train[cat_cols].astype('category')
 
 
- # Feature pipeline 
+
+# Feature pipeline 
 if use_feature_pipeline:
     train = apply_feature_engineering_selection(train)
 
@@ -85,68 +84,74 @@ high_correlation = ['V71', 'V64', 'V63', 'V60', 'V59', 'V58', 'V43', 'V33', 'V32
 train = train.drop(columns=high_correlation, errors='ignore')
 
 
-# Model training 
+# Model training
 X = train.drop(columns=['isFraud'])
 y = train['isFraud']
- 
 
-def objective(trial):
-    params = {
-        "random_state": 42,
-        "objective": "binary",
-        "boosting_type": "gbdt",
-        "metric": "binary_logloss",
-        "n_estimators": 3000, 
-        "max_depth": -1,
-        "feature_fraction": 0.9,
-        "bagging_freq": 0,
-        "bagging_fraction": 1.0,
-        "lambda_l1": 0.3,
-        "lambda_l2": 0.3,
+fold_results = []
+train['month'] = train['TransactionDT'] // (30*24*60*60)
+groups = train['month']
+gkf = GroupKFold(n_splits=5)
 
-        "scale_pos_weight": trial.suggest_int("scale_pos_weight", 2, 5),    
-        "learning_rate": trial.suggest_float("learning_rate", 0.009, 0.02, log=True),
-        "num_leaves": trial.suggest_int("num_leaves", 50, 300),
-        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 100, 400),
-        "min_gain_to_split": trial.suggest_float("min_gain_to_split", 0.0, 0.08),
-        }
+for train_idx, val_idx in gkf.split(X, y, groups=groups):
+    X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+    y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-    gkf = GroupKFold(n_splits=3)
-    train['month'] =  train['TransactionDT'] // (30*24*60*60)
-    groups = train['month']
-
-    results = []    
-
-    for fold, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=groups), 1):
-        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-
-        model = LGBMClassifier(**params)
-        model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)],
-            callbacks=[lgb.early_stopping(stopping_rounds=100)],
+    model = LGBMClassifier(
+        random_state=42,
+        objective = "binary",
+        boosting_type = "gbdt",
+        metric = "binary_logloss",
+        scale_pos_weight = 3,
         )
-
-        p = model.predict_proba(X_val)[:, 1]
-        prauc = average_precision_score(y_val, p)
-        results.append(prauc)
-
-        trial.report(np.mean(results), step=fold)
-        if trial.should_prune():
-            raise optuna.TrialPruned()
     
-    return float(np.mean(results))
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_val, y_val)],
+        eval_metric="average_precision",
+        callbacks=[lgb.early_stopping(stopping_rounds=100)],
+        )
+    
+    y_prob = model.predict_proba(X_val)[:, 1]
+    roc = roc_auc_score(y_val, y_prob)
+    prauc = average_precision_score(y_val, y_prob)
 
-study = optuna.create_study(
-    direction="maximize",
-    sampler=TPESampler(seed=42),
-    pruner=MedianPruner(n_startup_trials=5),
-)
-study.optimize(objective, n_trials=50, n_jobs=8, show_progress_bar=True)
+    y_pred = (y_prob >= 0.5).astype(int) # default threshold
+    acc = accuracy_score(y_val, y_pred)
+    prec = precision_score(y_val, y_pred)
+    rec = recall_score(y_val, y_pred)
+    f1 = f1_score(y_val, y_pred)
+    f2 = fbeta_score(y_val, y_pred, beta=2)
+    gmean = geometric_mean_score(y_val, y_pred)
+    mcc = matthews_corrcoef(y_val, y_pred)
 
-print("Best PR-AUC:", study.best_value)
-print("Best params:", study.best_params)
+    cm = confusion_matrix(y_val, y_pred)
+    tn, fp, fn, tp = cm.ravel()
+    fnr = fn / (fn + tp)
+    fpr = fp / (fp + tn)
 
-plot_optimization_history(study).show()
-plot_param_importances(study).show()
+
+    fold_results.append({'roc_auc': roc, 'pr_auc': prauc, 'accuracy':acc, 'precision': prec,
+                         'recall': rec, 'f1': f1, 'f2': f2, 'gmean': gmean, 'mcc': mcc,
+                         'fnr': fnr, 'fpr': fpr, 'confusion matrix': cm})
+
+avg_roc = np.mean([r['roc_auc'] for r in fold_results])
+avg_prauc = np.mean([r['pr_auc'] for r in fold_results])
+avg_acc = np.mean([r['accuracy'] for r in fold_results])
+avg_prec = np.mean([r['precision'] for r in fold_results])
+avg_rec = np.mean([r['recall']for r in fold_results])
+avg_f1 = np.mean([r['f1'] for r in fold_results])
+avg_f2 = np.mean([r['f2'] for r in fold_results])
+avg_gmean = np.mean([r['gmean'] for r in fold_results])
+avg_mcc = np.mean([r['mcc'] for r in fold_results])
+avg_fnr = np.mean([r['fnr'] for r in fold_results])
+avg_fpr = np.mean([r['fpr'] for r in fold_results])
+
+fold_results.append({'roc_auc': avg_roc, 'pr_auc': avg_prauc,  'accuracy': avg_acc,
+                     'precision': avg_prec, 'recall': avg_rec, 'f1': avg_f1, 'f2': avg_f2,
+                     'gmean': avg_gmean, 'mcc': avg_mcc, 'fnr': avg_fnr, 'fpr': avg_fpr})
+
+
+
+results = pd.DataFrame(fold_results)
+results.to_csv(project_root / "lgb_csl.csv")
