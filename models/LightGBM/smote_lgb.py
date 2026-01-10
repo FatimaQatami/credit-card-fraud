@@ -147,23 +147,6 @@ for train_idx, val_idx in gkf.split(X, y, groups=groups):
                          'recall': rec, 'f1': f1, 'f2': f2, 'gmean': gmean, 'mcc': mcc,
                          'fnr': fnr, 'fpr': fpr, 'confusion matrix': cm})
 
-avg_roc = np.mean([r['roc_auc'] for r in fold_results])
-avg_prauc = np.mean([r['pr_auc'] for r in fold_results])
-avg_acc = np.mean([r['accuracy'] for r in fold_results])
-avg_prec = np.mean([r['precision'] for r in fold_results])
-avg_rec = np.mean([r['recall']for r in fold_results])
-avg_f1 = np.mean([r['f1'] for r in fold_results])
-avg_f2 = np.mean([r['f2'] for r in fold_results])
-avg_gmean = np.mean([r['gmean'] for r in fold_results])
-avg_mcc = np.mean([r['mcc'] for r in fold_results])
-avg_fnr = np.mean([r['fnr'] for r in fold_results])
-avg_fpr = np.mean([r['fpr'] for r in fold_results])
-
-fold_results.append({'roc_auc': avg_roc, 'pr_auc': avg_prauc,  'accuracy': avg_acc,
-                     'precision': avg_prec, 'recall': avg_rec, 'f1': avg_f1, 'f2': avg_f2,
-                     'gmean': avg_gmean, 'mcc': avg_mcc, 'fnr': avg_fnr, 'fpr': avg_fpr})
-
-
 
 results = pd.DataFrame(fold_results)
 results.to_csv(project_root / "ieee-cis" / "baseline" / "lgb_smote.csv")
