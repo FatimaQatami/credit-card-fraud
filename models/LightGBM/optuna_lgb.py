@@ -14,7 +14,7 @@ from optuna.visualization import (plot_optimization_history, plot_param_importan
 # Including feature pipeline on/off
 use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
-    from feature_pipeline import apply_feature_engineering_selection
+    from feature_pipeline_lightgbm import apply_feature_engineering_selection
 
 
 # Load dataset 
@@ -52,8 +52,6 @@ low_permutation = [
     "hour", "V74", "V311", "V332", "V124", "V296", "V139", "id_06",
     "id_13_frq", "V243", "V24", "dist2", "V244", "V7", "M7", "V75",
     "V205", "V142", "V293", "D6_UID_std", "V190", "id_17", "V5", "V171"]
-train = train.drop(columns=low_permutation)
-
 low_treeshsp = [
     "V244","V39","V43","V262","V260","V32","V110","V111","V114","V85",
     "V31","V63","V84","V22","V21","V96","V15","V18","V17","V16","V33",
@@ -62,11 +60,7 @@ low_treeshsp = [
     "V104","V89","V97","V99","V101","V103","V240","V241","V246","V247",
     "V249","V252","V254","V255","V280","V191","V193","V194","V195",
     "V196","V198","V199","V222","V229","V230","V186"]
-train = train.drop(columns=low_treeshsp, errors='ignore')
-
 time_inconsistent = ['V314']
-train = train.drop(columns=time_inconsistent, errors='ignore')
-
 gain_split = [
     "V244","V39","V43","V260","V262","V15","V16","V17","V18","V21","V22",
     "V31","V32","V33","V63","V84","V85","V96","V110","V111","V114","id_35",
@@ -75,14 +69,12 @@ gain_split = [
     "V196","V198","V199","V222","V228","V229","V230","V240","V241","V246",
     "V247","V249","V252","V254","V255","V280","V292","id_12","id_32",
     "suffix_r","id_34_part2"]
-train = train.drop(columns=gain_split, errors='ignore')
-
 low_mi = ["V314"]
-train = train.drop(columns=low_mi, errors='ignore')
-
 high_correlation = ['V71', 'V64', 'V63', 'V60', 'V59', 'V58', 'V43', 'V33', 'V32', 'V31', 
                     '180', 'V17', 'V16']
-train = train.drop(columns=high_correlation, errors='ignore')
+if use_feature_pipeline:
+    train = train.drop(columns=(low_permutation + low_treeshsp + time_inconsistent + gain_split + low_mi + high_correlation),
+        errors="ignore")
 
 
 # Model training 

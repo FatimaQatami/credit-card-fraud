@@ -10,7 +10,7 @@ from sklearn.inspection import permutation_importance
 # Including feature pipeline on/off
 use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
-    from feature_pipeline import apply_feature_engineering_selection
+    from feature_pipeline_xgboost import apply_feature_engineering_selection
 
 
 # Load train file

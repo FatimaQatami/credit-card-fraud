@@ -10,7 +10,7 @@ from sklearn.metrics import average_precision_score
 # Including feature pipeline on/off
 use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
-    from feature_pipeline import apply_feature_engineering_selection
+    from feature_pipeline_lightgbm import apply_feature_engineering_selection
 
 
 # Dataset path
@@ -94,8 +94,6 @@ features = [
     "M_missing_ratio","id_28_combo","C3_UID_std","M2_UID_ct","ProductCD_frq",
     "DeviceType_frq","id_15_frq"
 ]
-
-
 
 drop_results = []
 for f in features:

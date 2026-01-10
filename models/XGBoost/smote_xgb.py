@@ -14,7 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 # Including feature pipeline on/off
 use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
-    from feature_pipeline import apply_feature_engineering_selection
+    from feature_pipeline_xgboost import apply_feature_engineering_selection
 
 # Load train data
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -49,17 +49,15 @@ if use_feature_pipeline:
 
 
 
-# Features to drop (based on feature selection)
+# Features to drop based on feature selection tests
 permutation = [
     "V139","id_37","V3","V137","V206","V93","V234","V42","V212",
     "suffix_r","V37","V164","V273","V51","V63","V223","is_mobile"]
-train = train.drop(columns=permutation)
-
 tree_shap = ['V339', 'V172']
-train = train.drop(columns=tree_shap)
-
 mi = ['V287', 'V99', 'V284']
-train = train.drop(columns=mi)
+if use_feature_pipeline:
+    train = train.drop(columns=(permutation + tree_shap + mi),
+        errors="ignore")
 
 
 

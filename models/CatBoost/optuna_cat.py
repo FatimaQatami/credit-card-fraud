@@ -14,7 +14,7 @@ from optuna.visualization import (plot_optimization_history, plot_param_importan
 # Including feature pipeline on/off
 use_feature_pipeline = True  # False = baseline
 if use_feature_pipeline:
-    from feature_pipeline import apply_feature_engineering_selection
+    from feature_pipeline_catboost import apply_feature_engineering_selection
 
 
 # Load data
@@ -60,7 +60,9 @@ feature_list = [
     "V238","V28","V279","V197","V199","V223","V21","V27","V269","V268","V155","V255","V211","V141","V140","V227","V225","V122",
     "V243","V328","V325","V324","V322","V241","V32","V237","V121","V235","V212","V305","V172"
     ]
-train = train.drop(columns=feature_list, errors='ignore')
+
+if use_feature_pipeline:
+    train = train.drop(columns=feature_list, errors='ignore')
 
 
 # Update categorical features 
